@@ -1,0 +1,26 @@
+# One-click deploy on Render: New > Blueprint > pick this repo.
+services:
+  - type: web
+    name: joinco-sourcing-intelligence
+    runtime: docker
+    plan: starter            # persistent disks need a paid instance
+    healthCheckPath: /healthz
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false          # paste in the Render dashboard
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_NAME
+        value: JOINCO Admin
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ANTHROPIC_MODEL
+        value: claude-opus-5-5
+      - key: ANALYSIS_EFFORT
+        value: low

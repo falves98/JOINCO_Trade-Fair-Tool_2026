@@ -1,0 +1,10 @@
+{
+  "name": "joinco-sourcing-intelligence",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "server.js",
+  "engines": { "node": ">=22.13" },
+  "scripts": { "start": "node --no-warnings server.js" },
+  "dependencies": { "@anthropic-ai/sdk": "^0.131.0" }
+}

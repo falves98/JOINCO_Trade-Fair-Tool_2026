@@ -267,11 +267,12 @@ function normKey(name){ return String(name||"").toLowerCase().replace(/&/g," and
   .replace(/\b(co|company|ltd|limited|inc|llc|gmbh|srl|s r l|sa|s a|corp|corporation|industrial|industry|industries|trading|manufacturing|manufacturer|factory|group|international|intl|import|export|imp|exp|technology|tech|products|the)\b/g," ").replace(/\s+/g," ").trim(); }
 function domainOf(w){ const m=String(w||"").toLowerCase().replace(/^[a-z]+:\/\//,"").replace(/^www\./,"").split(/[\/?#\s]/)[0]; return m.includes(".")?m:""; }
 function F(x){ // normalise an AI field into {v,src,ev}
-  if (x==null) return {v:"",src:"inference",ev:""};
+  if (x==null) return {v:"",src:"buyer",ev:""};
   if (typeof x!=="object") return {v:String(x),src:"inference",ev:""};
   let v = x.v ?? x.value ?? ""; if (v==null) v=""; if (typeof v!=="string") v = Array.isArray(v)? v.join(", ") : String(v);
   const src = SRC[x.src] ? x.src : (SRC[x.source] ? x.source : "inference");
-  return {v:v.trim(), src, ev:String(x.ev ?? x.evidence ?? "").slice(0,160)};
+  v=v.trim(); if(!v) return {v:"",src:"buyer",ev:""}; // anything typed into an empty field comes from the buyer
+  return {v, src, ev:String(x.ev ?? x.evidence ?? "").slice(0,160)};
 }
 const blankF = (src="buyer") => ({v:"",src,ev:""});
 const userName = id => id ? (NAMES[id] || (id===S.myId && S.me?.name) || "Colleague") : "—";
@@ -285,7 +286,7 @@ async function ensureNames(ids){
 /* ------------------------------------------------------------------ boot */
 async function boot(){
   if(!window.claude?.use){ S.offline=true; render(); return; }
-  const names=["db","assets","sample","user","downloads"];
+  const names=["db","assets","sample","user","downloads","team"];
   const got=await Promise.all(names.map(n=>window.claude.use(n).catch(()=>null)));
   names.forEach((n,i)=>S[n]=got[i]);
   if(S.user){ try{ S.me=await S.user.me(); S.myId=await S.user.id(); S.canWrite=await S.user.can("data.write"); S.isOwner=await S.user.isOwner(); }catch{} }
@@ -307,7 +308,7 @@ function go(view,params={}){ S.view=view; S.params=params; if(view!=="review") S
 
 function render(){
   const app=$("#app"), bar=$("#bar");
-  if(S.offline){ app.innerHTML=topBrand()+`<main class="main"><div class="empty-state"><h2>Open this app inside Claude</h2><p>JOINCO Sourcing Intelligence runs on a private, signed-in page. Open the shared link while signed in to your JOINCO Claude account. If you still see this, ask the app owner to share it with you as an Editor.</p></div></main>`; bar.innerHTML=""; return; }
+  if(S.offline){ app.innerHTML=topBrand()+`<main class="main"><div class="empty-state"><h2>Sign in to continue</h2><p>JOINCO Sourcing Intelligence is private. Open the app's link and sign in with your JOINCO account. If you still see this, ask your JOINCO admin for access.</p></div></main>`; bar.innerHTML=""; return; }
   const v=S.view;
   if(v==="visits") app.innerHTML=topBrand()+viewVisits();
   else if(v==="suppliers") app.innerHTML=topBrand()+viewSuppliers();
@@ -320,6 +321,7 @@ function render(){
   bar.innerHTML = (v==="capture"||v==="review") ? "" : tabBar();
   if(v==="capture") renderCaptureBar();
   if(v==="review") renderReviewBar();
+  if(v==="export") loadTeam();
   const ids=[...S.visits.map(x=>x.createdBy),...S.visits.map(x=>x.confirmedBy)].filter(Boolean); ensureNames(ids);
 }
 function topBrand(){ const n=S.me?.name; return `<header class="top"><div class="brand"><small>JOINCO</small><h1>Sourcing Intelligence</h1></div>${n?`<div class="who">${esc(n)}</div>`:""}</header>`; }
@@ -761,8 +763,22 @@ function viewExport(){
     <div class="stats">${[["suppliers","Suppliers"],["visits","Supplier visits"],["contacts","Contacts"],["products","Product opportunities"],["images","Visit images"]].map(([k,l])=>`<div class="stat"><span class="small">${l}</span><b>${n(k)}</b></div>`).join("")}</div>
     <button class="btn primary" data-act="exportzip" ${S.downloads&&window.JSZip?"":"disabled"}>${ICON.export}Download all tables (.zip)</button>
     <div class="row">${[["suppliers","Suppliers"],["visits","Visits"],["contacts","Contacts"],["products","Products"],["images","Images"]].map(([k,l])=>`<button class="btn small" data-act="exportone" data-t="${k}" ${S.downloads?"":"disabled"}>${l}.csv</button>`).join("")}</div>
-    ${S.downloads?"":`<div class="notice">Downloads are not available in this view.</div>`}</main>`;
+    ${S.downloads?"":`<div class="notice">Downloads are not available in this view.</div>`}
+    ${S.team?`<section class="card" aria-labelledby="h-team"><div class="card-h"><h2 id="h-team">Account</h2><button class="btn small" data-act="signout">Sign out</button></div>
+      <div class="small muted">Signed in as ${esc(S.me?.name||"")} ${S.me?.email?`(${esc(S.me.email)})`:""}</div>
+      ${S.isOwner?`<div class="sub"><div class="eyebrow">Team</div><div id="team-list" class="small muted">Loading…</div>
+        <div class="two"><div class="field"><label for="t-name">Name</label><input id="t-name" autocomplete="off"></div><div class="field"><label for="t-email">Email</label><input id="t-email" type="email" autocomplete="off"></div></div>
+        <div class="field"><label for="t-pw">Temporary password (8+ characters)</label><input id="t-pw" autocomplete="new-password"></div>
+        <label class="toggle"><input type="checkbox" id="t-admin">Can manage team</label>
+        <button class="btn" data-act="teamadd">Add buyer</button><div id="team-msg" class="small"></div></div>`:""}</section>`:""}</main>`;
 }
+async function loadTeam(){
+  const box=$("#team-list"); if(!box||!S.team) return;
+  try{ const us=await S.team.list(); box.innerHTML=`<div class="list">${us.map(u=>`<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0"><span><b style="color:var(--ink)">${esc(u.name)}</b> ${esc(u.email)}${u.admin?' · admin':''}</span>
+    <span class="row"><button class="copy" data-act="teampw" data-id="${u.id}" data-n="${esc(u.name)}">New password</button>${u.id!==S.myId?`<button class="copy" data-act="teamrm" data-id="${u.id}" data-n="${esc(u.name)}">Remove</button>`:""}</span></div>`).join("")}</div>`; }
+  catch{ box.textContent="Could not load the team."; }
+}
+function teamMsg(t,bad){ const m=$("#team-msg"); if(m){ m.textContent=t; m.style.color=bad?"var(--bad)":"var(--good)"; } }
 function csv(rows){ if(!rows.length) return ""; const cols=Object.keys(rows[0]); const q=v=>{ const s=v==null?"":String(v); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
   return "﻿"+[cols.join(","),...rows.map(r=>cols.map(c=>q(r[c])).join(","))].join("\r\n"); }
 function withSrc(o,fields){ const r={}; for(const [k] of fields){ r[k]=o[k]??""; r[k+"_source"]=o.prov?.[k]?.src?SRC[o.prov[k].src]?.label:""; r[k+"_evidence"]=o.prov?.[k]?.ev||""; } return r; }
@@ -823,6 +839,13 @@ document.addEventListener("click", async ev=>{
   else if(a==="confirm") confirmVisit();
   else if(a==="pstatus"){ try{ await S.db.collection("products").doc(el.dataset.id).update({status:el.dataset.s, updatedAt:nowIso()}); }catch{ toast("Could not update status"); } }
   else if(a==="exportzip") doExport("zip");
+  else if(a==="signout") S.team?.signOut();
+  else if(a==="teamadd"){ try{ const u=await S.team.add({name:$("#t-name").value,email:$("#t-email").value,password:$("#t-pw").value,admin:$("#t-admin").checked});
+      teamMsg(`Added ${u.name}. Send them the app link, their email and the temporary password.`); ["#t-name","#t-email","#t-pw"].forEach(x=>$(x).value=""); loadTeam(); }catch(e){ teamMsg(e?.message||"Could not add",true); } }
+  else if(a==="teampw"){ const pw=Math.random().toString(36).slice(2,8)+Math.random().toString(36).slice(2,6).toUpperCase();
+      try{ await S.team.setPassword(el.dataset.id,pw); teamMsg(`New password for ${el.dataset.n}: ${pw}`); }catch(e){ teamMsg(e?.message||"Failed",true); } }
+  else if(a==="teamrm"){ if(el.dataset.confirm!=="1"){ el.dataset.confirm="1"; el.textContent="Tap again to remove"; return; }
+      try{ await S.team.remove(el.dataset.id); teamMsg(`Removed ${el.dataset.n}`); loadTeam(); }catch(e){ teamMsg(e?.message||"Failed",true); } }
   else if(a==="exportone") doExport(el.dataset.t);
   else if(a==="copy"){ try{ await navigator.clipboard.writeText(el.dataset.v); toast("Copied"); }catch{ toast(el.dataset.v); } }
   else if(a==="zoom"){ $("#layer").innerHTML=`<div class="lightbox" data-act="closelb" role="dialog" aria-label="Photo"><img src="${esc(el.dataset.src)}" alt=""></div>`; }
