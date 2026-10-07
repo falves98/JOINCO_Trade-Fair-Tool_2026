@@ -394,8 +394,8 @@ function renderShots(){
   renderCaptureBar();
 }
 function noAiNotice(){
-  return `<div class="notice"><b>Photo analysis isn't available in this view.</b> The Claude phone app can't send photos to the AI yet. Your photos are still saved. Either:
-    <ul style="margin:6px 0 0;padding-left:18px"><li>open this app in your browser (claude.ai in Safari or Chrome, or on a laptop), open the visit and tap <b>Analyse</b>, or</li><li>tap <b>Type it myself</b> to fill in the details now.</li></ul></div>`;
+  return `<div class="notice"><b>Photo analysis isn't available on this device.</b> Claude can't receive photos from this page on a phone yet. Keep shooting, because every photo is saved to the visit. Then either:
+    <ul style="margin:6px 0 0;padding-left:18px"><li>tap <b>Save for later</b>, then open the visit on a laptop at claude.ai and tap <b>Analyse</b>, or</li><li>tap <b>Type it myself</b> to fill in the details now.</li></ul></div>`;
 }
 function renderCaptureBar(){
   if(!S.cap) return;
