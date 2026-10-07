@@ -1,0 +1,863 @@
+<title>JOINCO Sourcing Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+/* Layout: one-column phone app. Sticky top bar, scrolling content, fixed bottom tab bar
+   with a centre "New visit" button; capture/review screens swap the tab bar for an action bar. */
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --sunk:#E3E8ED; --ink:#13202C; --muted:#586674; --line:#D3DAE1;
+  --accent:#C2440F; --accent-ink:#FFFFFF; --accent-soft:#FBE6DC;
+  --obs:#0B7A62; --claim:#9A5B00; --ai:#6A46CF; --buyer:#1C5FBE;
+  --good:#0B7A62; --warn:#9A5B00; --bad:#B42318;
+  --shadow:0 1px 2px rgb(19 32 44 / .06), 0 4px 14px rgb(19 32 44 / .06);
+  --f-display:"Archivo","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D1319; --surface:#151D25; --sunk:#1B2530; --ink:#E6ECF1; --muted:#97A5B2; --line:#283442;
+  --accent:#FF7B42; --accent-ink:#1A0A02; --accent-soft:#3A2116;
+  --obs:#3FCCA7; --claim:#F0B341; --ai:#AE96FF; --buyer:#74AAFF;
+  --good:#3FCCA7; --warn:#F0B341; --bad:#FF8A80;
+  --shadow:0 1px 2px rgb(0 0 0 / .4); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D1319; --surface:#151D25; --sunk:#1B2530; --ink:#E6ECF1; --muted:#97A5B2; --line:#283442;
+  --accent:#FF7B42; --accent-ink:#1A0A02; --accent-soft:#3A2116;
+  --obs:#3FCCA7; --claim:#F0B341; --ai:#AE96FF; --buyer:#74AAFF;
+  --good:#3FCCA7; --warn:#F0B341; --bad:#FF8A80;
+  --shadow:0 1px 2px rgb(0 0 0 / .4); color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-body);-webkit-text-size-adjust:100%}
+button,input,textarea,select{font:inherit;color:inherit}
+h1,h2,h3{font-family:var(--f-display);font-stretch:85%;margin:0;text-wrap:balance;letter-spacing:-.01em}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+.app{max-width:640px;margin:0 auto;min-height:100%;padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);display:flex;align-items:center;gap:10px;padding:12px 16px 10px;border-bottom:1px solid var(--line)}
+.top h1{font-size:22px;font-weight:750;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand{display:flex;flex-direction:column;flex:1;min-width:0}
+.brand small{font:600 10px/1 var(--f-mono);letter-spacing:.14em;color:var(--accent);text-transform:uppercase}
+.brand h1{font-size:21px}
+.who{font-size:12px;color:var(--muted);text-align:right;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.back{border:0;background:var(--sunk);border-radius:999px;padding:8px 14px;font-weight:600;cursor:pointer}
+.main{padding:14px 16px;display:flex;flex-direction:column;gap:14px}
+
+/* tabs */
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabs-in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr 1.25fr 1fr 1fr;align-items:end;gap:2px}
+.tab{border:0;background:none;padding:8px 2px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer}
+.tab svg{width:22px;height:22px}
+.tab[aria-current="page"]{color:var(--ink)}
+.tab[aria-current="page"] svg{color:var(--accent)}
+.fab{border:0;background:var(--accent);color:var(--accent-ink);border-radius:16px;padding:10px 4px;font:700 13px/1.1 var(--f-body);display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;transform:translateY(-10px);box-shadow:0 6px 16px rgb(194 68 15 / .35)}
+.fab svg{width:24px;height:24px}
+
+/* action bar */
+.actbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.actbar-in{max-width:608px;margin:0 auto;display:flex;gap:10px;align-items:center}
+.actbar .hint{font-size:12px;color:var(--muted);flex:1;min-width:0}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:12px 16px;font-weight:650;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px}
+.btn svg{width:20px;height:20px;flex:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent}
+.btn.small{min-height:36px;padding:7px 12px;font-size:13px;border-radius:10px}
+.btn.wide{flex:1}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.danger{color:var(--bad)}
+.linkbtn{border:0;background:none;color:var(--accent);font-weight:650;padding:6px 0;cursor:pointer}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card h2{font-size:18px;font-weight:720}
+.card-h{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.eyebrow{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+
+/* chips + pills */
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 8px;font:600 11px/1.5 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.pill.draft{background:var(--sunk);color:var(--muted)}
+.pill.review{background:color-mix(in srgb,var(--claim) 16%,transparent);color:var(--claim)}
+.pill.confirmed{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.pill.analysing{background:color-mix(in srgb,var(--ai) 16%,transparent);color:var(--ai)}
+
+/* provenance */
+.src{border:1px solid currentColor;background:color-mix(in srgb,currentColor 10%,transparent);border-radius:6px;padding:1px 6px;font:600 10.5px/1.5 var(--f-mono);letter-spacing:.05em;text-transform:uppercase;cursor:pointer;white-space:nowrap}
+.src[data-s="observed"]{color:var(--obs)} .src[data-s="claim"]{color:var(--claim)}
+.src[data-s="inference"]{color:var(--ai)} .src[data-s="buyer"]{color:var(--buyer)}
+span.src{cursor:default}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:12px;color:var(--muted)}
+.legend div{display:flex;gap:6px;align-items:baseline}
+
+/* fields */
+.fields{display:grid;gap:10px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field-h{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.field label{font-size:12px;font-weight:650;color:var(--muted)}
+.field input,.field textarea,.field select,.inp{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;font-size:16px;min-height:44px}
+.field textarea,.inp.ta{min-height:64px;resize:vertical}
+.field .ev{font-size:11.5px;color:var(--muted);font-style:italic}
+.field.empty input,.field.empty textarea{border-style:dashed}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:380px){.two{grid-template-columns:1fr}}
+.sub{border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:10px}
+
+/* photos */
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.shot{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--sunk);max-width:100%}
+.shot img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
+.shot .x{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgb(0 0 0 / .6);color:#fff;font-size:16px;line-height:1;cursor:pointer}
+.shot .tag{position:absolute;left:4px;bottom:4px;right:4px;font:600 9.5px/1.3 var(--f-mono);text-transform:uppercase;background:rgb(0 0 0 / .62);color:#fff;border-radius:5px;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shot .st{position:absolute;top:4px;left:4px;font:600 9.5px/1.3 var(--f-mono);background:rgb(0 0 0 / .62);color:#fff;border-radius:5px;padding:2px 5px}
+.shot .n{position:absolute;top:4px;left:4px;font:600 10px/1 var(--f-mono);background:var(--surface);color:var(--ink);border-radius:5px;padding:3px 5px}
+.capbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.capbtns .btn{white-space:nowrap;padding-inline:10px}
+.capbtns .btn{min-height:64px;font-size:16px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* lists */
+.list{display:flex;flex-direction:column;gap:10px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:grid;grid-template-columns:56px 1fr auto;gap:12px;align-items:center;cursor:pointer;text-align:left;width:100%}
+.item.nothumb{grid-template-columns:1fr auto}
+.thumb{width:56px;height:56px;border-radius:9px;background:var(--sunk);object-fit:cover;display:block}
+.item .t{font-weight:700;font-size:15.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .m{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item>div{min-width:0}
+.score{font:600 18px/1 var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.score small{display:block;font:600 9px/1.4 var(--f-mono);letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.score.hi{color:var(--good)} .score.mid{color:var(--claim)} .score.lo{color:var(--muted)}
+.empty-state{border:1.5px dashed var(--line);border-radius:var(--r);padding:28px 18px;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center}
+.empty-state h2{font-size:20px}
+.empty-state p{margin:0;color:var(--muted);max-width:34ch}
+.search{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:11px 14px;font-size:16px}
+
+/* before you leave */
+.byl{border:2px solid var(--accent);background:linear-gradient(var(--accent-soft),var(--surface) 70px)}
+.byl h2{color:var(--accent)}
+.bitem{display:grid;grid-template-columns:30px 1fr;gap:8px;align-items:start;padding:8px 0;border-top:1px solid var(--line)}
+.bitem:first-of-type{border-top:0}
+.chk{width:28px;height:28px;border-radius:8px;border:2px solid var(--line);background:var(--surface);cursor:pointer;display:grid;place-items:center;padding:0}
+.chk[aria-checked="true"]{background:var(--good);border-color:var(--good);color:#fff}
+.chk svg{width:16px;height:16px}
+.bitem .q{font-weight:650}
+.bitem.done .q{text-decoration:line-through;color:var(--muted)}
+.bitem .why{font-size:12.5px;color:var(--muted)}
+.prio{font:600 10px/1.4 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;margin-right:6px}
+.prio.high{color:var(--bad)} .prio.medium{color:var(--claim)} .prio.low{color:var(--muted)}
+.bitem input{margin-top:6px;width:100%;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;font-size:15px}
+
+/* product card */
+.prod{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.prod.off{opacity:.55}
+.scorebox{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}
+.scorebox output{font:600 26px/1 var(--f-mono);min-width:2.2ch;font-variant-numeric:tabular-nums}
+.scorebox input{width:100%;accent-color:var(--accent)}
+.rationale{font-size:12.5px;color:var(--muted)}
+.toggle{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.toggle input{width:20px;height:20px;accent-color:var(--accent)}
+
+/* match banner */
+.match{border:1px solid var(--line);background:var(--sunk);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:14px}
+
+/* kv */
+.kv{display:grid;grid-template-columns:minmax(90px,34%) 1fr;gap:6px 12px;font-size:14px}
+.kv dt{color:var(--muted);font-size:12.5px;font-weight:600}
+.kv dd{margin:0;min-width:0;overflow-wrap:anywhere;display:flex;gap:6px;align-items:baseline;flex-wrap:wrap}
+
+/* overlay */
+.overlay{position:fixed;inset:0;z-index:50;background:rgb(10 16 22 / .72);display:grid;place-items:center;padding:16px}
+.panel{background:var(--surface);border-radius:16px;padding:20px;max-width:420px;width:100%;display:flex;flex-direction:column;gap:12px}
+.panel h2{font-size:20px}
+.steps{display:flex;flex-direction:column;gap:6px;font-size:14px}
+.steps div{display:flex;gap:8px;align-items:center;color:var(--muted)}
+.steps div.on{color:var(--ink);font-weight:650}
+.steps div.ok{color:var(--good)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none}
+.on .dot{background:var(--accent);animation:pulse 1s infinite alternate}
+.ok .dot{background:var(--good)}
+@keyframes pulse{to{opacity:.3}}
+.lightbox{position:fixed;inset:0;z-index:60;background:rgb(0 0 0 / .92);display:grid;place-items:center;padding:12px}
+.lightbox img{max-height:100%;max-width:100%;object-fit:contain}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(100px + env(safe-area-inset-bottom,0px));z-index:70;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;font-size:14px;max-width:calc(100% - 32px);box-shadow:var(--shadow)}
+.notice{border-left:4px solid var(--claim);background:var(--surface);padding:10px 12px;border-radius:8px;font-size:13.5px}
+.notice.err{border-left-color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.stat b{font:600 20px/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.copy{border:0;background:var(--sunk);border-radius:6px;font-size:11px;font-weight:650;padding:2px 7px;cursor:pointer}
+</style>
+
+<div class="app" id="app">
+  <header class="top"><div class="brand"><small>JOINCO</small><h1>Sourcing Intelligence</h1></div></header>
+  <main class="main"><div class="empty-state"><h2>Connecting to the shared database…</h2><p>Your visits, suppliers and product opportunities appear here once you are signed in.</p></div></main>
+</div>
+<div id="bar"></div>
+<div id="layer"></div>
+<input type="file" id="cam" class="vh" accept="image/*" capture="environment">
+<input type="file" id="lib" class="vh" accept="image/*" multiple>
+
+<script>
+"use strict";
+/* ------------------------------------------------------------------ constants */
+const SRC = {
+  observed:  {label:"Observed",       short:"Observed", help:"Seen directly in a photo"},
+  claim:     {label:"Supplier claim", short:"Claim",    help:"Stated by the supplier (printed or written)"},
+  inference: {label:"AI inference",   short:"AI guess", help:"Reasoned by AI, not stated anywhere"},
+  buyer:     {label:"Buyer note",     short:"Buyer",    help:"From the buyer's own notes"},
+};
+const SRC_ORDER = ["observed","claim","inference","buyer"];
+const SUPPLIER_FIELDS = [["name","Company name"],["country","Country"],["address","Address",1],["website","Website"],["businessType","Manufacturer / trader"]];
+const CONTACT_FIELDS = [["name","Name"],["role","Role"],["email","Email"],["phone","Phone"],["whatsapp","WhatsApp"]];
+const PRODUCT_FIELDS = [["category","Product / category"],["description","Description",1],["specs","Visible specifications",1],["materials","Materials"],["packaging","Packaging"],["certifications","Certifications / markings"],["moq","MOQ"],["price","Price"],["currency","Currency"],["incoterm","Incoterm"],["oem","Private label / OEM"]];
+const IMAGE_KINDS = {business_card:"Business card",signage:"Booth signage",product:"Product",packaging:"Packaging",catalogue:"Catalogue page",certification:"Certificate",handwritten:"Handwritten note",other:"Other"};
+const BIZ = {manufacturer:"Manufacturer",trader:"Trader",manufacturer_trader:"Manufacturer + trader",unknown:"Unknown"};
+const PSTATUS = ["lead","shortlist","rejected"];
+const LS = {get(k,d){try{const v=localStorage.getItem("jsi:"+k);return v==null?d:v}catch{return d}}, set(k,v){try{localStorage.setItem("jsi:"+k,v)}catch{}}};
+
+const ICON = {
+  visits:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>',
+  suppliers:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l7-4 7 4v13M9 21v-6h6v6"/></svg>',
+  products:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg>',
+  export:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>',
+  plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  camera:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
+  image:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>',
+  spark:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>',
+  check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>',
+};
+
+/* ------------------------------------------------------------------ state */
+const S = {
+  db:null, assets:null, sample:null, user:null, downloads:null,
+  me:null, myId:null, canWrite:null, imgLimits:null, ready:false, offline:false,
+  visits:[], suppliers:[], contacts:[], products:[], images:[],
+  view:"visits", params:{}, visitFilter:"all", q:"", pq:"", pstatus:"all",
+  cap:null,   // capture session
+  rv:null,    // review draft
+};
+const NAMES = {}; const namePending = new Set();
+
+/* ------------------------------------------------------------------ utils */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const nowIso = () => new Date().toISOString();
+const uid = () => (crypto.randomUUID ? crypto.randomUUID().replace(/-/g,"") : Math.random().toString(36).slice(2)+Date.now().toString(36));
+const fv = f => (f && typeof f === "object" ? f.v : f) ?? "";
+function ago(iso){ if(!iso) return ""; const s=(Date.now()-new Date(iso))/1000;
+  if(s<60) return "just now"; if(s<3600) return Math.floor(s/60)+" min ago"; if(s<86400) return Math.floor(s/3600)+" h ago";
+  return new Date(iso).toLocaleDateString(undefined,{day:"numeric",month:"short"}); }
+function scoreCls(n){ return n>=70?"hi":n>=45?"mid":"lo"; }
+function getPath(o,p){ return p.split(".").reduce((a,k)=>a==null?a:a[k],o); }
+function setPath(o,p,v){ const ks=p.split("."); const last=ks.pop(); const t=ks.reduce((a,k)=>a[k],o); t[last]=v; }
+function toast(msg,ms=2600){ document.querySelectorAll(".toast").forEach(x=>x.remove()); const t=document.createElement("div"); t.className="toast"; t.setAttribute("role","status"); t.textContent=msg; document.body.append(t); setTimeout(()=>t.remove(),ms); }
+function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+function blobUrl(assetId){ return assetId ? "/_blob/"+assetId : ""; }
+function normKey(name){ return String(name||"").toLowerCase().replace(/&/g," and ").replace(/[^a-z0-9À-ɏ一-鿿 ]+/g," ")
+  .replace(/\b(co|company|ltd|limited|inc|llc|gmbh|srl|s r l|sa|s a|corp|corporation|industrial|industry|industries|trading|manufacturing|manufacturer|factory|group|international|intl|import|export|imp|exp|technology|tech|products|the)\b/g," ").replace(/\s+/g," ").trim(); }
+function domainOf(w){ const m=String(w||"").toLowerCase().replace(/^[a-z]+:\/\//,"").replace(/^www\./,"").split(/[\/?#\s]/)[0]; return m.includes(".")?m:""; }
+function F(x){ // normalise an AI field into {v,src,ev}
+  if (x==null) return {v:"",src:"inference",ev:""};
+  if (typeof x!=="object") return {v:String(x),src:"inference",ev:""};
+  let v = x.v ?? x.value ?? ""; if (v==null) v=""; if (typeof v!=="string") v = Array.isArray(v)? v.join(", ") : String(v);
+  const src = SRC[x.src] ? x.src : (SRC[x.source] ? x.source : "inference");
+  return {v:v.trim(), src, ev:String(x.ev ?? x.evidence ?? "").slice(0,160)};
+}
+const blankF = (src="buyer") => ({v:"",src,ev:""});
+const userName = id => id ? (NAMES[id] || (id===S.myId && S.me?.name) || "Colleague") : "—";
+async function ensureNames(ids){
+  if(!S.user) return; const need=[...new Set(ids)].filter(i=>i && !(i in NAMES) && !namePending.has(i)); if(!need.length) return;
+  need.forEach(i=>namePending.add(i));
+  try{ const ps=await S.user.profiles(need); let changed=false; for(const i of need){ NAMES[i]=ps?.[i]?.name||""; changed=true; } if(changed && !["review","capture"].includes(S.view)) render(); }
+  catch{} finally{ need.forEach(i=>namePending.delete(i)); }
+}
+
+/* ------------------------------------------------------------------ boot */
+async function boot(){
+  if(!window.claude?.use){ S.offline=true; render(); return; }
+  const names=["db","assets","sample","user","downloads"];
+  const got=await Promise.all(names.map(n=>window.claude.use(n).catch(()=>null)));
+  names.forEach((n,i)=>S[n]=got[i]);
+  if(S.user){ try{ S.me=await S.user.me(); S.myId=await S.user.id(); S.canWrite=await S.user.can("data.write"); S.isOwner=await S.user.isOwner(); }catch{} }
+  if(S.sample){ try{ S.imgLimits=(await S.sample.limits())?.images||null; }catch{ S.imgLimits=null; } }
+  if(!S.db){ S.offline=true; render(); return; }
+  const sub=(name,q)=>q.onSnapshot(snap=>{ S[name]=snap.docs.map(d=>({id:d.id,...d.data()})); S.ready=true; onData(name); },
+    e=>{ console.warn(name,e); if(e?.code==="revoked"){ S.offline=true; render(); } });
+  sub("visits",   S.db.collection("visits").orderBy("createdAt","desc").limit(1000));
+  sub("suppliers",S.db.collection("suppliers").orderBy("name").limit(1000));
+  sub("contacts", S.db.collection("contacts").limit(1000));
+  sub("products", S.db.collection("products").orderBy("score","desc").limit(1000));
+  sub("images",   S.db.collection("images").orderBy("createdAt").limit(1000));
+  render();
+}
+const onData = debounce(()=>{ if(S.view==="review"||S.view==="capture"){ if(S.view==="capture") renderShots(); return; } render(); },60);
+
+/* ------------------------------------------------------------------ navigation */
+function go(view,params={}){ S.view=view; S.params=params; if(view!=="review") S.rv=null; if(view!=="capture") S.cap=null; render(); window.scrollTo(0,0); }
+
+function render(){
+  const app=$("#app"), bar=$("#bar");
+  if(S.offline){ app.innerHTML=topBrand()+`<main class="main"><div class="empty-state"><h2>Open this app inside Claude</h2><p>JOINCO Sourcing Intelligence runs on a private, signed-in page. Open the shared link while signed in to your JOINCO Claude account. If you still see this, ask the app owner to share it with you as an Editor.</p></div></main>`; bar.innerHTML=""; return; }
+  const v=S.view;
+  if(v==="visits") app.innerHTML=topBrand()+viewVisits();
+  else if(v==="suppliers") app.innerHTML=topBrand()+viewSuppliers();
+  else if(v==="supplier") app.innerHTML=viewSupplier();
+  else if(v==="products") app.innerHTML=topBrand()+viewProducts();
+  else if(v==="export") app.innerHTML=topBrand()+viewExport();
+  else if(v==="visit") app.innerHTML=viewVisit();
+  else if(v==="capture") { app.innerHTML=viewCapture(); renderShots(); }
+  else if(v==="review") app.innerHTML=viewReview();
+  bar.innerHTML = (v==="capture"||v==="review") ? "" : tabBar();
+  if(v==="capture") renderCaptureBar();
+  if(v==="review") renderReviewBar();
+  const ids=[...S.visits.map(x=>x.createdBy),...S.visits.map(x=>x.confirmedBy)].filter(Boolean); ensureNames(ids);
+}
+function topBrand(){ const n=S.me?.name; return `<header class="top"><div class="brand"><small>JOINCO</small><h1>Sourcing Intelligence</h1></div>${n?`<div class="who">${esc(n)}</div>`:""}</header>`; }
+function topBack(title,backTo="visits",params={}){ return `<header class="top"><button class="back" data-act="go" data-to="${backTo}" data-p='${esc(JSON.stringify(params))}'>← Back</button><h1>${esc(title)}</h1></header>`; }
+function tabBar(){
+  const t=(id,label)=>`<button class="tab" data-act="go" data-to="${id}" ${S.view===id||(id==="suppliers"&&S.view==="supplier")||(id==="visits"&&S.view==="visit")?'aria-current="page"':""}>${ICON[id]}${label}</button>`;
+  return `<nav class="tabs" aria-label="Sections"><div class="tabs-in">${t("visits","Visits")}${t("suppliers","Suppliers")}<button class="fab" data-act="new">${ICON.plus}New visit</button>${t("products","Products")}${t("export","Export")}</div></nav>`;
+}
+function statusPill(s){ const m={capturing:["draft","Draft"],analysing:["analysing","Analysing"],review:["review","To review"],confirmed:["confirmed","Confirmed"]}[s]||["draft",s||"Draft"]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
+function srcChip(src,path){ const s=SRC[src]?src:"inference"; return path ? `<button type="button" class="src" data-s="${s}" data-act="src" data-path="${path}" title="${esc(SRC[s].label)}. Tap to change">${SRC[s].short}</button>` : `<span class="src" data-s="${s}" title="${esc(SRC[s].label)}">${SRC[s].short}</span>`; }
+function imagesOf(visitId){ return S.images.filter(i=>i.visitId===visitId).sort((a,b)=>(a.takenAt||a.createdAt||"").localeCompare(b.takenAt||b.createdAt||"")||(a.seq||0)-(b.seq||0)); }
+function readOnlyNotice(){ return (S.canWrite===false || !S.assets) ? `<div class="notice">You can browse, but capturing visits needs <b>Editor</b> access. Ask the app owner to share it with you as an Editor.</div>` : ""; }
+
+/* ------------------------------------------------------------------ visits list */
+function viewVisits(){
+  const f=S.visitFilter;
+  let vs=S.visits;
+  if(f==="mine") vs=vs.filter(v=>v.createdBy===S.myId);
+  if(f==="open") vs=vs.filter(v=>v.status!=="confirmed");
+  const chip=(id,l)=>`<button class="chip" data-act="vfilter" data-f="${id}" aria-pressed="${f===id}">${l}</button>`;
+  const open=S.visits.filter(v=>v.status!=="confirmed" && v.createdBy===S.myId).length;
+  let body;
+  if(!S.ready) body=`<div class="empty-state"><p>Loading visits…</p></div>`;
+  else if(!vs.length) body=`<div class="empty-state"><h2>${S.visits.length?"Nothing here":"No booth visits yet"}</h2><p>${S.visits.length?"Try another filter.":"Tap <b>New visit</b>, photograph the business card, signage and products, and let the AI draft the supplier record for you to check."}</p>${S.visits.length?"":`<button class="btn primary" data-act="new">${ICON.camera}Start first visit</button>`}</div>`;
+  else body=`<div class="list">${vs.map(visitItem).join("")}</div>`;
+  return `<main class="main">${readOnlyNotice()}
+    <div class="row"><div class="grow"><div class="eyebrow">Booth visits</div></div>${open?`<span class="pill review">${open} open</span>`:""}</div>
+    <div class="chips">${chip("all","All buyers")}${chip("mine","Mine")}${chip("open","Not confirmed")}</div>${body}</main>`;
+}
+function visitItem(v){
+  const imgs=imagesOf(v.id); const th=imgs[0]?.assetId;
+  const ps=S.products.filter(p=>p.visitId===v.id); const top=ps.length?Math.max(...ps.map(p=>+p.score||0)):(v.review?.products?.length?Math.max(...v.review.products.map(p=>+p.score||0)):null);
+  const name=v.supplierName || fv(v.review?.supplier?.name) || "Unnamed supplier";
+  const meta=[v.fair, v.booth&&("Booth "+v.booth), imgs.length+" photo"+(imgs.length===1?"":"s"), userName(v.createdBy), ago(v.createdAt)].filter(Boolean).join(" · ");
+  return `<button class="item${th?"":" nothumb"}" data-act="openvisit" data-id="${v.id}">${th?`<img class="thumb" src="${blobUrl(th)}" alt="" loading="lazy">`:""}
+    <div><div class="t">${esc(name)}</div><div class="m">${esc(meta)}</div><div style="margin-top:4px">${statusPill(v.status)}</div></div>
+    ${top!=null?`<div class="score ${scoreCls(top)}">${top}<small>Top score</small></div>`:"<div></div>"}</button>`;
+}
+
+/* ------------------------------------------------------------------ capture */
+function startCapture(resume){
+  if(!S.assets || S.canWrite===false){ toast("Capturing needs Editor access to this app"); return; }
+  const ref = resume ? S.db.collection("visits").doc(resume.id) : S.db.collection("visits").doc();
+  S.cap = { id:ref.id, ref, created:!!resume, createP:null, shots:[], fair: resume?.fair ?? LS.get("fair",""), booth: resume?.booth ?? "", notes: resume?.buyerNotes ?? "" };
+  if(resume){ for(const im of imagesOf(resume.id)) S.cap.shots.push({key:im.id, docId:im.id, assetId:im.assetId, url:blobUrl(im.assetId), status:"done", kind:im.kind}); }
+  go("capture",{id:ref.id});
+}
+function viewCapture(){
+  const c=S.cap;
+  return `<header class="top"><button class="back" data-act="go" data-to="visits">← Visits</button><h1>New visit</h1></header>
+  <main class="main">
+    <div class="capbtns">
+      <button class="btn primary" data-act="cam">${ICON.camera}Take photo</button>
+      <button class="btn" data-act="lib">${ICON.image}Add photos</button>
+    </div>
+    <div id="shots"></div>
+    <p class="small muted" style="margin:0">Card, booth sign, products, packaging, catalogue pages, certificates, handwritten prices. The AI reads them together.</p>
+    <div class="two">
+      <div class="field"><label for="c-fair">Fair</label><input id="c-fair" data-cap="fair" value="${esc(c.fair)}" placeholder="e.g. Canton Fair Ph.2" autocomplete="off"></div>
+      <div class="field"><label for="c-booth">Booth</label><input id="c-booth" data-cap="booth" value="${esc(c.booth)}" placeholder="e.g. 9.2 F31" autocomplete="off"></div>
+    </div>
+    <div class="field"><label for="c-notes">Quick note <span class="muted">(optional, saved as a buyer note)</span></label>
+      <textarea id="c-notes" data-cap="notes" rows="2" placeholder="e.g. Good quality bamboo range, said FOB Xiamen, 2 weeks for samples">${esc(c.notes)}</textarea></div>
+    ${S.sample?"":`<div class="notice">AI analysis is not available in this view. You can still save photos and type the details yourself.</div>`}
+  </main>`;
+}
+function renderShots(){
+  const box=$("#shots"); if(!box||!S.cap) return;
+  const sh=S.cap.shots;
+  box.innerHTML = sh.length ? `<div class="shots">${sh.map((s,i)=>`<div class="shot"><img src="${s.url}" alt="Photo ${i+1}" data-act="zoom" data-src="${s.url}"><span class="${s.status==="done"?"n":"st"}">${s.status==="done"?i+1:s.status==="error"?"Upload failed":"Saving…"}</span>${s.kind?`<span class="tag">${esc(IMAGE_KINDS[s.kind]||s.kind)}</span>`:""}<button class="x" data-act="rmshot" data-k="${s.key}" aria-label="Remove photo ${i+1}">×</button></div>`).join("")}</div>`
+    : `<div class="empty-state" style="padding:18px"><p>No photos yet. Start with the business card.</p></div>`;
+  renderCaptureBar();
+}
+function renderCaptureBar(){
+  if(!S.cap) return;
+  const n=S.cap.shots.length; const max=S.imgLimits?.maxCount;
+  const hint = !n ? "Add at least one photo" : (max && n>max ? `AI reads the first ${max} photos` : `${n} photo${n>1?"s":""} ready`);
+  $("#bar").innerHTML=`<div class="actbar"><div class="actbar-in">
+    <button class="btn ghost small" data-act="manual" ${n?"":"disabled"}>Type it myself</button>
+    <span class="hint">${hint}</span>
+    <button class="btn primary" data-act="analyse" ${n&&S.sample?"":"disabled"}>${ICON.spark}Analyse</button></div></div>`;
+}
+async function ensureVisitDoc(){
+  const c=S.cap; if(c.created) return; if(c.createP) return c.createP;
+  c.createP = c.ref.set({status:"capturing", createdAt:nowIso(), createdBy:S.myId||null, fair:c.fair, booth:c.booth, buyerNotes:c.notes, supplierName:""})
+    .then(()=>{ c.created=true; });
+  return c.createP;
+}
+const saveCapMeta = debounce(async ()=>{ const c=S.cap; if(!c||!c.created) return; try{ await c.ref.update({fair:c.fair, booth:c.booth, buyerNotes:c.notes}); }catch(e){ console.warn(e); } },800);
+
+async function compress(file){
+  let src, w, h;
+  try{ src=await createImageBitmap(file,{imageOrientation:"from-image"}); w=src.width; h=src.height; }
+  catch{ src=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=URL.createObjectURL(file); }); w=src.naturalWidth; h=src.naturalHeight; }
+  const k=Math.min(1,1800/Math.max(w,h)); const cw=Math.round(w*k), ch=Math.round(h*k);
+  const cv=document.createElement("canvas"); cv.width=cw; cv.height=ch; cv.getContext("2d").drawImage(src,0,0,cw,ch);
+  return await new Promise(r=>cv.toBlob(r,"image/jpeg",0.84));
+}
+async function addFiles(files){
+  const c=S.cap; if(!c) return;
+  const list=[...files].filter(f=>/^image\//.test(f.type)||/\.(jpe?g|png|webp|gif|heic)$/i.test(f.name));
+  for(const file of list){
+    const shot={key:uid(), status:"saving", url:URL.createObjectURL(file), takenAt:nowIso(), seq:c.shots.length}; c.shots.push(shot); renderShots();
+    (async()=>{
+      try{
+        const blob=await compress(file); shot.blob=blob; URL.revokeObjectURL(shot.url); shot.url=URL.createObjectURL(blob); renderShots();
+        await ensureVisitDoc();
+        const up=await S.assets.upload(blob,{type:"image/jpeg"});
+        if(!c.shots.includes(shot)) return;
+        shot.assetId=up.id; shot.docId=uid();
+        await S.db.collection("images").doc(shot.docId).set({visitId:c.id, assetId:up.id, kind:"", summary:"", bytes:up.sizeBytes, takenAt:shot.takenAt, seq:shot.seq, createdAt:nowIso(), createdBy:S.myId||null});
+        shot.status="done";
+      }catch(e){ console.warn(e); shot.status="error"; toast(e?.code==="quota_or_state"?"Photo storage is full":"A photo did not upload. Remove it and try again"); }
+      renderShots();
+    })();
+  }
+}
+async function removeShot(key){
+  const c=S.cap; const i=c.shots.findIndex(s=>s.key===key); if(i<0) return; const s=c.shots[i]; c.shots.splice(i,1); renderShots();
+  try{ if(s.docId) await S.db.collection("images").doc(s.docId).delete(); if(s.assetId) await S.assets.delete(s.assetId); }catch(e){ console.warn(e); }
+}
+
+/* ------------------------------------------------------------------ AI analysis */
+function buildPrompt(n, ctx){
+  return `You are the sourcing analyst for JOINCO's buying team. A JOINCO buyer is standing at ONE supplier booth at a trade fair and has taken ${n} photo(s) of it, attached in order as image 1 to image ${n}. Analyse ALL images together as one booth visit and extract structured sourcing data.
+
+Photos may show: business cards, booth signage, product photos, packaging, catalogue pages, certificates or test reports, handwritten commercial information (prices, MOQ, terms written by the supplier), or other things.
+
+Visit context from the buyer: fair = ${JSON.stringify(ctx.fair||"")}, booth = ${JSON.stringify(ctx.booth||"")}.
+Buyer's own typed notes (treat as buyer notes, not as supplier facts): ${JSON.stringify(ctx.notes||"")}
+
+EVIDENCE RULES. Every extracted field is an object {"v": string or null, "src": "observed" | "claim" | "inference" | "buyer", "ev": "<= 12 words naming the image(s), e.g. 'img 1, business card'"}.
+- "observed": printed or physically visible in a photo and legible: a name on a card, a printed address, a visible material, a CE mark physically on the product, a carton size printed on packaging.
+- "claim": something the supplier asserts: marketing statements ("factory direct", "we are the manufacturer", "20 years experience"), catalogue promises, certification logos on brochures or signage without the certificate itself, prices/MOQ/terms the supplier wrote or printed.
+- "buyer": only from the buyer's typed notes above.
+- "inference": your own reasoning that nobody stated (country from phone prefix or address, category naming, manufacturer vs trader judgement from weak signals, a likely spec).
+Never invent data. If nothing supports a field, return {"v": null}. Copy emails, phone numbers and websites character-for-character. Keep phone numbers in international format when the country is clear.
+supplier.businessType.v must be one of "manufacturer", "trader", "manufacturer_trader", "unknown"; use anything other than "unknown" only with evidence and explain it in ev.
+product.oem.v: "yes", "no" or "unknown", with ev giving the basis (e.g. "img 3 sign: OEM/ODM welcome").
+price.v is the number or range as written (e.g. "2.35" or "1.80-2.10/pc"); currency.v is an ISO code (USD, EUR, CNY...) when known; incoterm.v like "FOB Ningbo".
+
+PRODUCTS. One entry per distinct product or product family that is a sourcing opportunity (max 8). score is an integer 0-100 commercial opportunity score for JOINCO: weigh product appeal and differentiation, evidence of private-label/OEM capability, supplier credibility, certifications relevant to the target market, clarity of price/MOQ/Incoterm, and how complete the information is. score_rationale is one short sentence. The score is always your inference.
+
+BEFORE YOU LEAVE. List 3-8 specific questions or items the buyer must still obtain at this booth, ordered by importance, for anything commercially important that is missing or only claimed: unit price and currency, MOQ, Incoterm and port, lead time, sample cost and timing, OEM/private-label options and minimums, proof of certifications, payment terms, carton/packaging specs, factory vs trading company, a named contact with email/WhatsApp. Make each one specific to what you saw (e.g. "Ask FOB price for the 500 ml bottle at 3,000 pcs"). priority is "high", "medium" or "low".
+
+IMAGES. For each image give kind (one of "business_card", "signage", "product", "packaging", "catalogue", "certification", "handwritten", "other") and a short note of what it shows.
+
+Reply with ONLY this JSON (no prose):
+{"images":[{"n":1,"kind":"business_card","note":"..."}],
+ "supplier":{"name":{"v":"","src":"observed","ev":""},"country":{...},"address":{...},"website":{...},"businessType":{...}},
+ "contacts":[{"name":{...},"role":{...},"email":{...},"phone":{...},"whatsapp":{...}}],
+ "products":[{"category":{...},"description":{...},"specs":{...},"materials":{...},"packaging":{...},"certifications":{...},"moq":{...},"price":{...},"currency":{...},"incoterm":{...},"oem":{...},"score":0,"score_rationale":""}],
+ "before_you_leave":[{"item":"","why":"","priority":"high"}],
+ "summary":"one sentence on what this supplier offers"}`;
+}
+function draftFromAI(ai, ctx){
+  ai = ai && typeof ai==="object" ? ai : {};
+  const sup=ai.supplier||{}; const supplier={}; SUPPLIER_FIELDS.forEach(([k])=>supplier[k]=F(sup[k]));
+  const bt=supplier.businessType.v.toLowerCase().replace(/[^a-z_]/g,""); supplier.businessType.v = BIZ[bt]?bt:(supplier.businessType.v?"unknown":"");
+  const contacts=(Array.isArray(ai.contacts)?ai.contacts:[]).slice(0,10).map(c=>{ const o={}; CONTACT_FIELDS.forEach(([k])=>o[k]=F(c?.[k])); return o; })
+    .filter(c=>CONTACT_FIELDS.some(([k])=>c[k].v));
+  const products=(Array.isArray(ai.products)?ai.products:[]).slice(0,12).map(p=>{ const o={include:true}; PRODUCT_FIELDS.forEach(([k])=>o[k]=F(p?.[k]));
+    const ov=o.oem.v.toLowerCase(); o.oem.v = /^(yes|no|unknown)$/.test(ov)?ov:(o.oem.v?o.oem.v:"");
+    o.score=Math.max(0,Math.min(100,Math.round(+p?.score||0))); o.aiScore=o.score; o.scoreRationale=String(p?.score_rationale||p?.scoreRationale||""); return o; });
+  const byl=(Array.isArray(ai.before_you_leave)?ai.before_you_leave:[]).slice(0,10).map(b=>({item:String(b?.item||b||""),why:String(b?.why||""),priority:/^(high|medium|low)$/.test(b?.priority)?b.priority:"medium",done:false,answer:""})).filter(b=>b.item);
+  const images=(Array.isArray(ai.images)?ai.images:[]).map(i=>({n:+i?.n||0,kind:IMAGE_KINDS[i?.kind]?i.kind:"other",note:String(i?.note||"")}));
+  return {supplier, contacts, products, byl, images, summary:String(ai.summary||""), buyerNotes:ctx.notes||"", match:null, analysed:true};
+}
+function emptyDraft(ctx){
+  const supplier={}; SUPPLIER_FIELDS.forEach(([k])=>supplier[k]=blankF());
+  const p={include:true,score:50,aiScore:null,scoreRationale:""}; PRODUCT_FIELDS.forEach(([k])=>p[k]=blankF());
+  const c={}; CONTACT_FIELDS.forEach(([k])=>c[k]=blankF());
+  return {supplier, contacts:[c], products:[p], byl:defaultByl(), images:[], summary:"", buyerNotes:ctx.notes||"", match:null, analysed:false};
+}
+function defaultByl(){ return [["Unit price and currency for the main item","high"],["MOQ per item / colour","high"],["Incoterm and port (e.g. FOB Ningbo)","high"],["Lead time and sample cost","medium"],["Private label / OEM options","medium"],["Contact email or WhatsApp","medium"]].map(([item,priority])=>({item,why:"",priority,done:false,answer:""})); }
+
+let analyseCtl=null;
+function showProgress(step, extra=""){
+  const steps=["Saving photos","Reading all photos together","Writing the supplier draft"];
+  $("#layer").innerHTML=`<div class="overlay" role="dialog" aria-modal="true" aria-label="Analysing"><div class="panel">
+    <h2>Analysing booth photos</h2>
+    <div class="steps">${steps.map((s,i)=>`<div class="${i<step?"ok":i===step?"on":""}"><span class="dot"></span>${s}</div>`).join("")}</div>
+    <div class="small muted" id="prog-extra">${esc(extra)}</div>
+    <button class="btn" data-act="stopai">Stop and type it myself</button></div></div>`;
+}
+function hideProgress(){ $("#layer").innerHTML=""; }
+async function analyse(){
+  const c=S.cap; if(!c||!c.shots.length) return;
+  showProgress(0);
+  try{
+    await ensureVisitDoc();
+    for(const s of c.shots){ if(!s.blob && s.assetId){ try{ s.blob=await (await fetch(blobUrl(s.assetId))).blob(); }catch{} } }
+    let usable=c.shots.filter(s=>s.blob);
+    const max=S.imgLimits?.maxCount||20; if(usable.length>max) usable=usable.slice(0,max);
+    if(!usable.length) throw {code:"no_images"};
+    await c.ref.update({status:"analysing", fair:c.fair, booth:c.booth, buyerNotes:c.notes});
+    showProgress(1, "Usually 15–45 seconds.");
+    analyseCtl=new AbortController(); let started=false;
+    const ai=await S.sample.json(buildPrompt(usable.length,c), {images:usable.map(s=>s.blob), signal:analyseCtl.signal, modelTier:"default",
+      onText:({text})=>{ if(!started){ started=true; showProgress(2); } const el=$("#prog-extra"); if(el) el.textContent=`${text.length.toLocaleString()} characters written`; }});
+    const rv=draftFromAI(ai,c);
+    // label photos with the AI's image kinds
+    await Promise.all(usable.map((s,i)=>{ const im=rv.images.find(x=>x.n===i+1); if(!im||!s.docId) return null; s.kind=im.kind; return S.db.collection("images").doc(s.docId).update({kind:im.kind, summary:im.note}).catch(()=>null); }));
+    await c.ref.update({status:"review", analysedAt:nowIso(), ai:{raw:ai, imageCount:usable.length}, review:rv, supplierName:rv.supplier.name.v||""});
+    hideProgress(); openReview(c.id, rv);
+  }catch(e){
+    hideProgress(); analyseCtl=null;
+    if(e?.code==="cancelled"){ manualReview(); return; }
+    const msg={not_granted:"Claude was not allowed for this page. Allow it in the page's permissions, or type the details yourself.",
+      rate_limited:"Claude usage limit reached for now. Type the details yourself or try again in a few minutes.",
+      invalid_json:"The AI answer could not be read. Tap Analyse to try again.", refused:"The AI declined these photos. Type the details yourself.",
+      image_rejected:"One of the photos could not be read. Remove it and try again.", no_images:"Photos are still loading. Try again in a moment.",
+      images_unavailable:"This view cannot send photos to Claude. Type the details yourself."}[e?.code] || "Analysis failed. Tap Analyse to try again, or type the details yourself.";
+    try{ if(S.cap?.created) await S.cap.ref.update({status:"capturing"}); }catch{}
+    toast(msg,5000);
+  }
+}
+async function manualReview(){
+  const c=S.cap; if(!c) return; await ensureVisitDoc();
+  const rv=emptyDraft(c); await c.ref.update({status:"review", review:rv, fair:c.fair, booth:c.booth, buyerNotes:c.notes}); openReview(c.id, rv);
+}
+
+/* ------------------------------------------------------------------ review */
+function openReview(visitId, rv){
+  const v=S.visits.find(x=>x.id===visitId)||{id:visitId};
+  rv = rv || structuredClone(v.review || emptyDraft({notes:v.buyerNotes}));
+  rv.visitId=visitId; rv.fair = rv.fair ?? v.fair ?? S.cap?.fair ?? ""; rv.booth = rv.booth ?? v.booth ?? S.cap?.booth ?? "";
+  if(rv.match==null){ const m=findMatch(rv.supplier); rv.match = m?m.id:"new"; }
+  S.cap=null; S.view="review"; S.params={id:visitId}; S.rv=rv; render(); window.scrollTo(0,0);
+}
+function findMatch(sup){
+  const k=normKey(fv(sup.name)), d=domainOf(fv(sup.website));
+  if(!k && !d) return null;
+  return S.suppliers.find(s=> (d && domainOf(s.website)===d) || (k && s.nameKey===k) || (k.length>=5 && s.nameKey && s.nameKey.length>=5 && (s.nameKey.includes(k)||k.includes(s.nameKey))) ) || null;
+}
+function fieldHtml(base,[k,label,long],f){
+  const p=`${base}.${k}`, id="f-"+p.replace(/\./g,"-"); const val=f.v||"";
+  let input;
+  if(k==="businessType") input=`<select id="${id}" data-bind="${p}.v"><option value="">—</option>${Object.entries(BIZ).map(([bk,bl])=>`<option value="${bk}" ${val===bk?"selected":""}>${bl}</option>`).join("")}</select>`;
+  else if(k==="oem") input=`<select id="${id}" data-bind="${p}.v"><option value="">—</option>${["yes","no","unknown"].map(o=>`<option value="${o}" ${val===o?"selected":""}>${o[0].toUpperCase()+o.slice(1)}</option>`).join("")}${val&&!/^(yes|no|unknown)$/.test(val)?`<option selected>${esc(val)}</option>`:""}</select>`;
+  else if(long) input=`<textarea id="${id}" data-bind="${p}.v" rows="2">${esc(val)}</textarea>`;
+  else input=`<input id="${id}" data-bind="${p}.v" value="${esc(val)}" ${k==="email"?'type="email" inputmode="email"':""}${k==="phone"||k==="whatsapp"?'inputmode="tel"':""} autocomplete="off">`;
+  return `<div class="field${val?"":" empty"}"><div class="field-h"><label for="${id}">${label}</label>${srcChip(f.src,p)}</div>${input}${f.ev?`<div class="ev">${esc(f.ev)}</div>`:""}</div>`;
+}
+function viewReview(){
+  const rv=S.rv; const v=S.visits.find(x=>x.id===rv.visitId)||{};
+  const imgs=imagesOf(rv.visitId);
+  const confirmed=v.status==="confirmed";
+  return `<header class="top"><button class="back" data-act="leavereview">← Visits</button><h1>Review</h1>${confirmed?statusPill("confirmed"):`<span class="pill draft">Not saved yet</span>`}</header>
+  <main class="main">
+    ${rv.analysed?`<div class="notice">AI draft. Check every field, fix anything wrong, then tap <b>Confirm</b>. Nothing reaches the supplier database until you confirm.</div>`:`<div class="notice">Manual entry. Fill in what you have, then tap <b>Confirm</b>.</div>`}
+    ${rv.summary?`<p style="margin:0" class="small"><span class="src" data-s="inference">AI</span> ${esc(rv.summary)}</p>`:""}
+
+    <section class="card byl" aria-labelledby="h-byl"><div class="card-h"><h2 id="h-byl">Before you leave the booth</h2><span class="small muted">${rv.byl.filter(b=>b.done).length}/${rv.byl.length}</span></div>
+      <div>${rv.byl.map((b,i)=>`<div class="bitem${b.done?" done":""}"><button class="chk" role="checkbox" aria-checked="${b.done}" data-act="byl" data-i="${i}" aria-label="Mark obtained">${b.done?ICON.check:""}</button>
+        <div><div class="q"><span class="prio ${b.priority}">${b.priority}</span>${esc(b.item)}</div>${b.why?`<div class="why">${esc(b.why)}</div>`:""}
+        <input id="byl-${i}" data-bind="byl.${i}.answer" value="${esc(b.answer)}" placeholder="Answer (saved as buyer note)" aria-label="Answer for: ${esc(b.item)}"></div></div>`).join("")}</div>
+      <div class="row"><input class="inp grow" id="byl-new" placeholder="Add something to ask" style="min-height:40px;font-size:15px"><button class="btn small" data-act="byladd">Add</button></div>
+    </section>
+
+    <details class="card" style="gap:8px"><summary class="small" style="cursor:pointer;font-weight:650">What the source tags mean</summary>
+      <div class="legend">${SRC_ORDER.map(s=>`<div>${srcChip(s)}<span>${SRC[s].help}</span></div>`).join("")}</div>
+      <div class="small muted">Tap a tag on any field to change it.</div></details>
+
+    <section class="card" aria-labelledby="h-sup"><div class="card-h"><h2 id="h-sup">Supplier</h2></div>
+      <div id="matchbox">${matchBoxHtml()}</div>
+      <div class="fields">${SUPPLIER_FIELDS.map(d=>fieldHtml("supplier",d,rv.supplier[d[0]])).join("")}</div></section>
+
+    <section class="card" aria-labelledby="h-con"><div class="card-h"><h2 id="h-con">Contacts</h2><button class="linkbtn" data-act="addcontact">+ Add contact</button></div>
+      ${rv.contacts.length?rv.contacts.map((c,i)=>`<div class="sub"><div class="card-h"><span class="eyebrow">Contact ${i+1}</span><button class="linkbtn" style="color:var(--bad)" data-act="rmcontact" data-i="${i}">Remove</button></div>
+        <div class="fields">${CONTACT_FIELDS.map(d=>fieldHtml(`contacts.${i}`,d,c[d[0]])).join("")}</div></div>`).join(""):`<p class="small muted" style="margin:0">No contact found. Add one if you got a name.</p>`}
+    </section>
+
+    <section class="card" aria-labelledby="h-prod"><div class="card-h"><h2 id="h-prod">Product opportunities</h2><button class="linkbtn" data-act="addproduct">+ Add product</button></div>
+      ${rv.products.length?rv.products.map((p,i)=>`<div class="prod${p.include?"":" off"}">
+        <div class="card-h"><label class="toggle"><input type="checkbox" data-bind="products.${i}.include" ${p.include?"checked":""}>Save this product</label><button class="linkbtn" style="color:var(--bad)" data-act="rmproduct" data-i="${i}">Remove</button></div>
+        <div class="field"><div class="field-h"><label for="sc-${i}">Opportunity score</label><span id="scsrc-${i}">${p.aiScore!=null&&p.score===p.aiScore?srcChip("inference"):srcChip("buyer")}</span></div>
+          <div class="scorebox"><output id="sco-${i}">${p.score}</output><input type="range" id="sc-${i}" min="0" max="100" step="5" value="${p.score}" data-bind="products.${i}.score" data-num="1"></div>
+          ${p.scoreRationale?`<div class="rationale">${esc(p.scoreRationale)}${p.aiScore!=null&&p.aiScore!==p.score?` (AI said ${p.aiScore})`:""}</div>`:""}</div>
+        <div class="fields">${PRODUCT_FIELDS.map(d=>fieldHtml(`products.${i}`,d,p[d[0]])).join("")}</div></div>`).join(""):`<p class="small muted" style="margin:0">No products yet.</p>`}
+    </section>
+
+    <section class="card" aria-labelledby="h-notes"><div class="card-h"><h2 id="h-notes">Buyer notes</h2>${srcChip("buyer")}</div>
+      <div class="field"><label for="rv-notes" class="vh">Buyer notes</label><textarea id="rv-notes" data-bind="buyerNotes" rows="3" placeholder="Your impressions, what was promised, follow-ups">${esc(rv.buyerNotes)}</textarea></div></section>
+
+    <section class="card"><div class="card-h"><h2>Photos</h2><span class="small muted">${imgs.length}</span></div>
+      <div class="shots">${imgs.map((im,i)=>`<div class="shot"><img src="${blobUrl(im.assetId)}" alt="${esc(im.summary||"Photo "+(i+1))}" data-act="zoom" data-src="${blobUrl(im.assetId)}" loading="lazy"><span class="n">${i+1}</span>${im.kind?`<span class="tag">${esc(IMAGE_KINDS[im.kind]||im.kind)}</span>`:""}</div>`).join("")}</div>
+      ${!confirmed?`<button class="btn small" data-act="backtocap">Add more photos and re-analyse</button>`:""}</section>
+    <div id="rv-err"></div>
+  </main>`;
+}
+function matchBoxHtml(){
+  const rv=S.rv; const m = rv.match && rv.match!=="new" ? S.suppliers.find(s=>s.id===rv.match) : null;
+  const cand = m || findMatch(rv.supplier); if(!cand) return "";
+  return `<div class="match"><div>${m?`Saving to existing supplier <b>${esc(m.name)}</b>${m.country?` (${esc(m.country)})`:""}. New details update that record.`:`Similar supplier already in the database: <b>${esc(cand.name)}</b>${cand.country?` (${esc(cand.country)})`:""}.`}</div>
+     <div class="row"><button class="btn small" data-act="match" data-id="${cand.id}" ${m?"disabled":""}>Use existing</button><button class="btn small" data-act="match" data-id="new" ${m?"":"disabled"}>Create new supplier</button></div></div>`;
+}
+function renderReviewBar(){
+  const v=S.visits.find(x=>x.id===S.rv?.visitId);
+  $("#bar").innerHTML=`<div class="actbar"><div class="actbar-in"><span class="hint" id="rv-saved">Draft autosaves on this visit</span>
+    <button class="btn primary" data-act="confirm">${ICON.check}${v?.status==="confirmed"?"Save changes":"Confirm & save"}</button></div></div>`;
+}
+const saveDraft = debounce(async ()=>{
+  const rv=S.rv; if(!rv) return;
+  try{ const clean=structuredClone(rv); await S.db.collection("visits").doc(rv.visitId).update({review:clean, buyerNotes:rv.buyerNotes, supplierName:fv(rv.supplier.name)});
+    const el=$("#rv-saved"); if(el) el.textContent="Draft saved "+new Date().toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }catch(e){ console.warn(e); }
+},1200);
+
+async function confirmVisit(){
+  const rv=S.rv; const err=$("#rv-err");
+  const name=fv(rv.supplier.name).trim();
+  if(!name){ toast("Add the supplier's company name first"); $("#f-supplier-name")?.focus(); return; }
+  const btn=document.querySelector('[data-act="confirm"]'); if(btn){ btn.disabled=true; btn.textContent="Saving…"; }
+  try{
+    const now=nowIso(); const visit=S.visits.find(x=>x.id===rv.visitId)||{};
+    const prov=(obj,fields)=>Object.fromEntries(fields.map(([k])=>[k,{src:obj[k]?.src||"buyer",ev:obj[k]?.ev||""}]));
+    const vals=(obj,fields)=>Object.fromEntries(fields.map(([k])=>[k,fv(obj[k]).trim()]));
+    // supplier
+    let supId = rv.match && rv.match!=="new" && S.suppliers.some(s=>s.id===rv.match) ? rv.match : null;
+    const sv=vals(rv.supplier,SUPPLIER_FIELDS), sp=prov(rv.supplier,SUPPLIER_FIELDS);
+    if(supId){
+      const ex=S.suppliers.find(s=>s.id===supId); const patch={updatedAt:now, updatedBy:S.myId||null}; const pp={...(ex.prov||{})};
+      for(const [k] of SUPPLIER_FIELDS){ if(sv[k] && sv[k]!==ex[k]){ patch[k]=sv[k]; pp[k]=sp[k]; } }
+      if(patch.name) patch.nameKey=normKey(patch.name); patch.prov=pp; patch.domain=domainOf(patch.website ?? ex.website);
+      await S.db.collection("suppliers").doc(supId).update(patch);
+    } else {
+      const ref=S.db.collection("suppliers").doc(); supId=ref.id;
+      await ref.set({...sv, nameKey:normKey(sv.name), domain:domainOf(sv.website), prov:sp, createdAt:now, createdBy:S.myId||null, updatedAt:now, firstVisitId:rv.visitId});
+    }
+    // contacts
+    const keepC=[], keepP=[]; const writes=[];
+    rv.contacts.forEach(c=>{ const cv=vals(c,CONTACT_FIELDS); if(!Object.values(cv).some(Boolean)) return; c._id=c._id||uid(); keepC.push(c._id);
+      writes.push(S.db.collection("contacts").doc(c._id).set({...cv, prov:prov(c,CONTACT_FIELDS), supplierId:supId, supplierName:name, visitId:rv.visitId, createdBy:S.myId||null, createdAt:c._at||(c._at=now), updatedAt:now})); });
+    rv.products.forEach(p=>{ if(!p.include) return; const pv=vals(p,PRODUCT_FIELDS); if(!Object.values(pv).some(Boolean)) return; p._id=p._id||uid(); keepP.push(p._id);
+      const ex=S.products.find(x=>x.id===p._id);
+      writes.push(S.db.collection("products").doc(p._id).set({...pv, prov:prov(p,PRODUCT_FIELDS), score:+p.score||0, aiScore:p.aiScore, scoreRationale:p.scoreRationale||"",
+        scoreSrc:(p.aiScore!=null&&p.score===p.aiScore)?"inference":"buyer", status:ex?.status||"lead", supplierId:supId, supplierName:name, visitId:rv.visitId, fair:rv.fair||visit.fair||"",
+        createdBy:S.myId||null, createdAt:p._at||(p._at=now), updatedAt:now})); });
+    // remove records dropped since a previous confirmation of this visit
+    for(const c of S.contacts.filter(x=>x.visitId===rv.visitId && !keepC.includes(x.id))) writes.push(S.db.collection("contacts").doc(c.id).delete());
+    for(const p of S.products.filter(x=>x.visitId===rv.visitId && !keepP.includes(x.id))) writes.push(S.db.collection("products").doc(p.id).delete());
+    await Promise.all(writes);
+    rv.match=supId;
+    await S.db.collection("visits").doc(rv.visitId).update({status:"confirmed", supplierId:supId, supplierName:name, review:structuredClone(rv), buyerNotes:rv.buyerNotes,
+      beforeYouLeave:rv.byl, confirmedAt:visit.confirmedAt||now, confirmedBy:visit.confirmedBy||S.myId||null, updatedAt:now, contactIds:keepC, productIds:keepP});
+    toast(`Saved ${name}: ${keepC.length} contact${keepC.length===1?"":"s"}, ${keepP.length} product${keepP.length===1?"":"s"}`);
+    const id=rv.visitId; S.rv=null; go("visit",{id});
+  }catch(e){
+    console.warn(e); if(btn){ btn.disabled=false; btn.textContent="Confirm & save"; }
+    if(err) err.innerHTML=`<div class="notice err">Not saved: ${e?.code==="quota_exceeded"?"the database is full. Export and archive old visits.":e?.code==="invalid_argument"?"you do not have write access. Ask for Editor access.":"connection problem. Check signal and tap Confirm again."}</div>`;
+  }
+}
+
+/* ------------------------------------------------------------------ visit detail */
+function kvRow(label,val,src){ return val?`<dt>${esc(label)}</dt><dd><span>${esc(val)}</span>${src?srcChip(src):""}</dd>`:""; }
+function viewVisit(){
+  const v=S.visits.find(x=>x.id===S.params.id);
+  if(!v) return topBack("Visit")+`<main class="main"><div class="empty-state"><p>This visit was not found.</p></div></main>`;
+  const imgs=imagesOf(v.id); const sup=S.suppliers.find(s=>s.id===v.supplierId);
+  const cs=S.contacts.filter(c=>c.visitId===v.id), ps=S.products.filter(p=>p.visitId===v.id);
+  const byl=v.beforeYouLeave||v.review?.byl||[];
+  return topBack(v.supplierName||"Visit")+`<main class="main">
+    <div class="row">${statusPill(v.status)}<span class="small muted">${esc([v.fair,v.booth&&"Booth "+v.booth].filter(Boolean).join(" · "))}</span></div>
+    <div class="small muted">Captured by ${esc(userName(v.createdBy))}, ${esc(new Date(v.createdAt).toLocaleString())}${v.confirmedBy?` · confirmed by ${esc(userName(v.confirmedBy))}`:""}</div>
+    ${sup?`<button class="item nothumb" data-act="go" data-to="supplier" data-p='${esc(JSON.stringify({id:sup.id}))}'><div><div class="eyebrow">Supplier</div><div class="t">${esc(sup.name)}</div><div class="m">${esc([sup.country,BIZ[sup.businessType]].filter(Boolean).join(" · "))}</div></div><div class="muted">›</div></button>`:""}
+    ${ps.length?`<section class="card"><h2>Product opportunities</h2><div class="list">${ps.map(productItem).join("")}</div></section>`:""}
+    ${cs.length?`<section class="card"><h2>Contacts</h2>${cs.map(contactBlock).join("")}</section>`:""}
+    ${byl.length?`<section class="card"><h2>Before you leave</h2>${byl.map(b=>`<div class="bitem${b.done?" done":""}"><span class="chk" aria-checked="${!!b.done}" role="img" aria-label="${b.done?"Obtained":"Open"}">${b.done?ICON.check:""}</span><div><div class="q"><span class="prio ${esc(b.priority)}">${esc(b.priority)}</span>${esc(b.item)}</div>${b.answer?`<div class="why">${srcChip("buyer")} ${esc(b.answer)}</div>`:""}</div></div>`).join("")}</section>`:""}
+    ${v.buyerNotes?`<section class="card"><div class="card-h"><h2>Buyer notes</h2>${srcChip("buyer")}</div><p style="margin:0;white-space:pre-wrap">${esc(v.buyerNotes)}</p></section>`:""}
+    <section class="card"><h2>Photos</h2><div class="shots">${imgs.map((im,i)=>`<div class="shot"><img src="${blobUrl(im.assetId)}" alt="${esc(im.summary||"Photo "+(i+1))}" data-act="zoom" data-src="${blobUrl(im.assetId)}" loading="lazy">${im.kind?`<span class="tag">${esc(IMAGE_KINDS[im.kind]||im.kind)}</span>`:""}</div>`).join("")||`<p class="small muted">No photos.</p>`}</div></section>
+    ${S.canWrite!==false?`<div class="row"><button class="btn wide" data-act="editvisit" data-id="${v.id}">Edit and re-confirm</button>${v.createdBy===S.myId||S.isOwner?`<button class="btn danger" data-act="delvisit" data-id="${v.id}">Delete</button>`:""}</div><div id="delbox"></div>`:""}
+  </main>`;
+}
+function contactBlock(c){
+  const line=(k,l)=>c[k]?`<dt>${l}</dt><dd><span>${esc(c[k])}</span>${srcChip(c.prov?.[k]?.src)}${["email","phone","whatsapp"].includes(k)?`<button class="copy" data-act="copy" data-v="${esc(c[k])}">Copy</button>`:""}</dd>`:"";
+  return `<div class="sub"><dl class="kv">${CONTACT_FIELDS.map(([k,l])=>line(k,l)).join("")}</dl></div>`;
+}
+function productItem(p){
+  return `<button class="item nothumb" data-act="go" data-to="supplier" data-p='${esc(JSON.stringify({id:p.supplierId}))}'><div><div class="t">${esc(p.category||p.description||"Product")}</div>
+    <div class="m">${esc([p.supplierName, p.price&&(p.price+" "+(p.currency||"")).trim(), p.moq&&("MOQ "+p.moq), p.incoterm, p.oem==="yes"&&"OEM ok"].filter(Boolean).join(" · "))}</div>
+    <div style="margin-top:4px" class="row"><span class="pill ${p.status==="shortlist"?"confirmed":p.status==="rejected"?"draft":"review"}">${esc(p.status||"lead")}</span></div></div>
+    <div class="score ${scoreCls(+p.score||0)}">${+p.score||0}<small>Score</small></div></button>`;
+}
+
+/* ------------------------------------------------------------------ suppliers */
+function viewSuppliers(){
+  const q=S.q.toLowerCase();
+  const list=S.suppliers.filter(s=>!q||[s.name,s.country,s.website].some(x=>String(x||"").toLowerCase().includes(q)));
+  return `<main class="main"><div class="eyebrow">Suppliers · ${S.suppliers.length}</div>
+    <input class="search" id="sup-q" data-q="q" value="${esc(S.q)}" placeholder="Search name, country, website" type="search">
+    ${!S.suppliers.length?`<div class="empty-state"><h2>No confirmed suppliers yet</h2><p>Suppliers appear here after a buyer reviews and confirms a booth visit.</p></div>`:
+    `<div class="list">${list.map(s=>{ const vs=S.visits.filter(v=>v.supplierId===s.id); const ps=S.products.filter(p=>p.supplierId===s.id); const top=ps.length?Math.max(...ps.map(p=>+p.score||0)):null;
+      const th=imagesOf(vs[0]?.id)[0]?.assetId;
+      return `<button class="item${th?"":" nothumb"}" data-act="go" data-to="supplier" data-p='${esc(JSON.stringify({id:s.id}))}'>${th?`<img class="thumb" src="${blobUrl(th)}" alt="" loading="lazy">`:""}<div><div class="t">${esc(s.name)}</div>
+      <div class="m">${esc([s.country,BIZ[s.businessType]&&s.businessType!=="unknown"?BIZ[s.businessType]:"",vs.length+" visit"+(vs.length===1?"":"s"),ps.length+" product"+(ps.length===1?"":"s")].filter(Boolean).join(" · "))}</div></div>
+      ${top!=null?`<div class="score ${scoreCls(top)}">${top}<small>Top</small></div>`:"<div></div>"}</button>`;}).join("")}</div>`}</main>`;
+}
+function viewSupplier(){
+  const s=S.suppliers.find(x=>x.id===S.params.id);
+  if(!s) return topBack("Supplier","suppliers")+`<main class="main"><div class="empty-state"><p>Supplier not found.</p></div></main>`;
+  const cs=S.contacts.filter(c=>c.supplierId===s.id), ps=S.products.filter(p=>p.supplierId===s.id), vs=S.visits.filter(v=>v.supplierId===s.id);
+  const pr=k=>s.prov?.[k]?.src;
+  return topBack(s.name,"suppliers")+`<main class="main">
+    <section class="card"><h2>${esc(s.name)}</h2><dl class="kv">${kvRow("Country",s.country,pr("country"))}${kvRow("Address",s.address,pr("address"))}${kvRow("Website",s.website,pr("website"))}${kvRow("Type",BIZ[s.businessType]||s.businessType,pr("businessType"))}</dl>
+      ${s.prov?.businessType?.ev?`<div class="small muted">Type basis: ${esc(s.prov.businessType.ev)}</div>`:""}</section>
+    <section class="card"><h2>Product opportunities</h2>${ps.length?`<div class="list">${ps.map(p=>productDetail(p)).join("")}</div>`:`<p class="small muted" style="margin:0">None saved.</p>`}</section>
+    <section class="card"><h2>Contacts</h2>${cs.length?cs.map(contactBlock).join(""):`<p class="small muted" style="margin:0">None saved.</p>`}</section>
+    <section class="card"><h2>Visits</h2><div class="list">${vs.map(visitItem).join("")}</div></section></main>`;
+}
+function productDetail(p){
+  const r=(k,l)=>p[k]?`<dt>${l}</dt><dd><span>${esc(p[k])}</span>${srcChip(p.prov?.[k]?.src)}</dd>`:"";
+  return `<div class="prod"><div class="card-h"><div class="grow"><div style="font-weight:700">${esc(p.category||"Product")}</div></div><div class="score ${scoreCls(+p.score||0)}">${+p.score||0}<small>${p.scoreSrc==="buyer"?"Buyer":"AI"} score</small></div></div>
+    ${p.scoreRationale?`<div class="rationale">${esc(p.scoreRationale)}</div>`:""}
+    <dl class="kv">${PRODUCT_FIELDS.filter(([k])=>k!=="category").map(([k,l])=>r(k,l)).join("")}</dl>
+    <div class="row"><span class="small muted">Status</span>${PSTATUS.map(st=>`<button class="chip" data-act="pstatus" data-id="${p.id}" data-s="${st}" aria-pressed="${(p.status||"lead")===st}" ${S.canWrite===false?"disabled":""}>${st}</button>`).join("")}</div></div>`;
+}
+
+/* ------------------------------------------------------------------ products */
+function viewProducts(){
+  const q=S.pq.toLowerCase(); const st=S.pstatus;
+  const list=S.products.filter(p=>(st==="all"||(p.status||"lead")===st) && (!q||[p.category,p.description,p.supplierName,p.materials,p.certifications].some(x=>String(x||"").toLowerCase().includes(q))));
+  const chip=(id,l)=>`<button class="chip" data-act="pfilter" data-f="${id}" aria-pressed="${st===id}">${l}</button>`;
+  return `<main class="main"><div class="eyebrow">Product opportunities · ranked by score</div>
+    <input class="search" id="prod-q" data-q="pq" value="${esc(S.pq)}" placeholder="Search product, material, supplier" type="search">
+    <div class="chips">${chip("all","All")}${chip("lead","Leads")}${chip("shortlist","Shortlist")}${chip("rejected","Rejected")}</div>
+    ${!S.products.length?`<div class="empty-state"><h2>No product opportunities yet</h2><p>Products are saved when a buyer confirms a visit. The highest-scoring ones rise to the top.</p></div>`:`<div class="list">${list.map(productItem).join("")||`<p class="muted small">No match.</p>`}</div>`}</main>`;
+}
+
+/* ------------------------------------------------------------------ export */
+function viewExport(){
+  const n=k=>S[k].length;
+  return `<main class="main"><div class="eyebrow">CSV export</div>
+    <p style="margin:0" class="small muted">One CSV per table, UTF-8, with a <i>_source</i> column next to each extracted field (observed, claim, inference, buyer). Draft visits are included with status so nothing is lost.</p>
+    <div class="stats">${[["suppliers","Suppliers"],["visits","Supplier visits"],["contacts","Contacts"],["products","Product opportunities"],["images","Visit images"]].map(([k,l])=>`<div class="stat"><span class="small">${l}</span><b>${n(k)}</b></div>`).join("")}</div>
+    <button class="btn primary" data-act="exportzip" ${S.downloads&&window.JSZip?"":"disabled"}>${ICON.export}Download all tables (.zip)</button>
+    <div class="row">${[["suppliers","Suppliers"],["visits","Visits"],["contacts","Contacts"],["products","Products"],["images","Images"]].map(([k,l])=>`<button class="btn small" data-act="exportone" data-t="${k}" ${S.downloads?"":"disabled"}>${l}.csv</button>`).join("")}</div>
+    ${S.downloads?"":`<div class="notice">Downloads are not available in this view.</div>`}</main>`;
+}
+function csv(rows){ if(!rows.length) return ""; const cols=Object.keys(rows[0]); const q=v=>{ const s=v==null?"":String(v); return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  return "﻿"+[cols.join(","),...rows.map(r=>cols.map(c=>q(r[c])).join(","))].join("\r\n"); }
+function withSrc(o,fields){ const r={}; for(const [k] of fields){ r[k]=o[k]??""; r[k+"_source"]=o.prov?.[k]?.src?SRC[o.prov[k].src]?.label:""; r[k+"_evidence"]=o.prov?.[k]?.ev||""; } return r; }
+async function tables(){
+  const ids=[...new Set([...S.visits.flatMap(v=>[v.createdBy,v.confirmedBy]),...S.suppliers.map(s=>s.createdBy),...S.images.map(i=>i.createdBy)].filter(Boolean))];
+  if(S.user && ids.length){ try{ const ps=await S.user.profiles(ids); ids.forEach(i=>NAMES[i]=ps?.[i]?.name||NAMES[i]||""); }catch{} }
+  const nm=i=>i?(NAMES[i]||i):"";
+  const supName=id=>S.suppliers.find(s=>s.id===id)?.name||"";
+  return {
+    suppliers: S.suppliers.map(s=>({supplier_id:s.id, ...withSrc(s,SUPPLIER_FIELDS), business_type_label:BIZ[s.businessType]||"", visits:S.visits.filter(v=>v.supplierId===s.id).length, created_at:s.createdAt, created_by:nm(s.createdBy), updated_at:s.updatedAt||""})),
+    visits: S.visits.map(v=>{ const b=v.beforeYouLeave||v.review?.byl||[]; return {visit_id:v.id, status:v.status, supplier_id:v.supplierId||"", supplier_name:v.supplierName||"", fair:v.fair||"", booth:v.booth||"", photos:imagesOf(v.id).length,
+      buyer_notes:v.buyerNotes||"", before_you_leave_open:b.filter(x=>!x.done).map(x=>x.item).join(" | "), before_you_leave_obtained:b.filter(x=>x.done||x.answer).map(x=>x.item+(x.answer?": "+x.answer:"")).join(" | "),
+      ai_summary:v.review?.summary||"", created_at:v.createdAt, created_by:nm(v.createdBy), analysed_at:v.analysedAt||"", confirmed_at:v.confirmedAt||"", confirmed_by:nm(v.confirmedBy)}; }),
+    contacts: S.contacts.map(c=>({contact_id:c.id, supplier_id:c.supplierId, supplier_name:supName(c.supplierId)||c.supplierName||"", visit_id:c.visitId, ...withSrc(c,CONTACT_FIELDS), created_at:c.createdAt})),
+    products: S.products.map(p=>({product_id:p.id, supplier_id:p.supplierId, supplier_name:supName(p.supplierId)||p.supplierName||"", visit_id:p.visitId, fair:p.fair||"", status:p.status||"lead", score:p.score, score_source:p.scoreSrc==="buyer"?"Buyer note":"AI inference", ai_score:p.aiScore??"", score_rationale:p.scoreRationale||"", ...withSrc(p,PRODUCT_FIELDS), created_at:p.createdAt})),
+    images: S.images.map(i=>{ const v=S.visits.find(x=>x.id===i.visitId); return {image_id:i.id, visit_id:i.visitId, supplier_id:v?.supplierId||"", supplier_name:v?.supplierName||"", kind:IMAGE_KINDS[i.kind]||i.kind||"", ai_note:i.summary||"", asset_id:i.assetId, asset_path:blobUrl(i.assetId), bytes:i.bytes||"", created_at:i.createdAt, created_by:nm(i.createdBy)}; }),
+  };
+}
+async function doExport(which){
+  try{
+    const t=await tables(); const stamp=new Date().toISOString().slice(0,10);
+    if(which==="zip"){ const z=new JSZip(); for(const [k,rows] of Object.entries(t)) z.file(`joinco_${k}_${stamp}.csv`, csv(rows)||"(empty)\r\n"); const blob=await z.generateAsync({type:"blob"}); await S.downloads.save({filename:`joinco_sourcing_${stamp}.zip`, data:blob}); }
+    else { const body=csv(t[which]); if(!body){ toast("That table is empty"); return; } await S.downloads.save({filename:`joinco_${which}_${stamp}.csv`, data:body}); }
+    toast("Export ready");
+  }catch(e){ if(e?.code!=="declined") toast(e?.code==="rate_limited"?"A download is already waiting for you":"Export failed. Try again"); }
+}
+
+/* ------------------------------------------------------------------ events */
+document.addEventListener("click", async ev=>{
+  const el=ev.target.closest("[data-act]"); if(!el) return;
+  const a=el.dataset.act;
+  if(a==="go"){ let p={}; try{ p=JSON.parse(el.dataset.p||"{}"); }catch{} go(el.dataset.to,p); }
+  else if(a==="new") startCapture();
+  else if(a==="cam") $("#cam").click();
+  else if(a==="lib") $("#lib").click();
+  else if(a==="rmshot") removeShot(el.dataset.k);
+  else if(a==="analyse") analyse();
+  else if(a==="manual") manualReview();
+  else if(a==="stopai") analyseCtl?.abort();
+  else if(a==="vfilter"){ S.visitFilter=el.dataset.f; render(); }
+  else if(a==="pfilter"){ S.pstatus=el.dataset.f; render(); }
+  else if(a==="openvisit"){ const v=S.visits.find(x=>x.id===el.dataset.id); if(!v) return;
+    if(v.status==="confirmed") go("visit",{id:v.id}); else if(v.review && v.status!=="analysing") openReview(v.id); else startCapture(v); }
+  else if(a==="editvisit") openReview(el.dataset.id);
+  else if(a==="delvisit"){ $("#delbox").innerHTML=`<div class="notice err row"><span class="grow">Delete this visit, its photos, and the contacts and products saved from it? The supplier record stays.</span><button class="btn small danger" data-act="delyes" data-id="${el.dataset.id}">Delete</button></div>`; }
+  else if(a==="delyes") deleteVisit(el.dataset.id);
+  else if(a==="leavereview"){ saveDraft(); go("visits"); }
+  else if(a==="backtocap"){ const v=S.visits.find(x=>x.id===S.rv.visitId); S.rv=null; startCapture(v||{id:S.params.id}); }
+  else if(a==="src"){ const f=getPath(S.rv,el.dataset.path); const n=SRC_ORDER[(SRC_ORDER.indexOf(f.src)+1)%SRC_ORDER.length]; f.src=n; el.dataset.s=n; el.textContent=SRC[n].short; el.title=SRC[n].label+". Tap to change"; saveDraft(); }
+  else if(a==="byl"){ const b=S.rv.byl[+el.dataset.i]; b.done=!b.done; rerenderReview(); saveDraft(); }
+  else if(a==="byladd"){ const i=$("#byl-new"); if(i.value.trim()){ S.rv.byl.push({item:i.value.trim(),why:"",priority:"medium",done:false,answer:""}); rerenderReview(); saveDraft(); } }
+  else if(a==="addcontact"){ const c={}; CONTACT_FIELDS.forEach(([k])=>c[k]=blankF()); S.rv.contacts.push(c); rerenderReview(); }
+  else if(a==="rmcontact"){ S.rv.contacts.splice(+el.dataset.i,1); rerenderReview(); saveDraft(); }
+  else if(a==="addproduct"){ const p={include:true,score:50,aiScore:null,scoreRationale:""}; PRODUCT_FIELDS.forEach(([k])=>p[k]=blankF()); S.rv.products.push(p); rerenderReview(); }
+  else if(a==="rmproduct"){ S.rv.products.splice(+el.dataset.i,1); rerenderReview(); saveDraft(); }
+  else if(a==="match"){ S.rv.match=el.dataset.id; rerenderReview(); saveDraft(); }
+  else if(a==="confirm") confirmVisit();
+  else if(a==="pstatus"){ try{ await S.db.collection("products").doc(el.dataset.id).update({status:el.dataset.s, updatedAt:nowIso()}); }catch{ toast("Could not update status"); } }
+  else if(a==="exportzip") doExport("zip");
+  else if(a==="exportone") doExport(el.dataset.t);
+  else if(a==="copy"){ try{ await navigator.clipboard.writeText(el.dataset.v); toast("Copied"); }catch{ toast(el.dataset.v); } }
+  else if(a==="zoom"){ $("#layer").innerHTML=`<div class="lightbox" data-act="closelb" role="dialog" aria-label="Photo"><img src="${esc(el.dataset.src)}" alt=""></div>`; }
+  else if(a==="closelb") $("#layer").innerHTML="";
+});
+const updateMatchBox = debounce(()=>{ const b=$("#matchbox"); if(b&&S.rv) b.innerHTML=matchBoxHtml(); },400);
+function rerenderReview(){ const y=window.scrollY; $("#app").innerHTML=viewReview(); window.scrollTo(0,y); }
+document.addEventListener("input", ev=>{
+  const el=ev.target;
+  if(el.dataset.cap && S.cap){ S.cap[el.dataset.cap]=el.value; if(el.dataset.cap==="fair") LS.set("fair",el.value); saveCapMeta(); return; }
+  if(el.dataset.q){ S[el.dataset.q]=el.value; const pos=el.selectionStart; render(); const n=$("#"+el.id); if(n){ n.focus(); try{ n.setSelectionRange(pos,pos); }catch{} } return; }
+  if(el.dataset.bind && S.rv){
+    let val = el.type==="checkbox" ? el.checked : el.value; if(el.dataset.num) val=+val;
+    setPath(S.rv, el.dataset.bind, val);
+    if(/^products\.\d+\.score$/.test(el.dataset.bind)){ const i=el.dataset.bind.split(".")[1], p=S.rv.products[i]; $("#sco-"+i).textContent=val; $("#scsrc-"+i).innerHTML=srcChip(p.aiScore!=null&&p.score===p.aiScore?"inference":"buyer"); }
+    if(/^products\.\d+\.include$/.test(el.dataset.bind)) rerenderReview();
+    if(el.dataset.bind==="supplier.name"||el.dataset.bind==="supplier.website") updateMatchBox();
+    el.closest(".field")?.classList.toggle("empty",!el.value);
+    saveDraft();
+  }
+});
+document.addEventListener("change", ev=>{
+  const el=ev.target;
+  if(el.id==="cam"||el.id==="lib"){ if(el.files?.length) addFiles(el.files); el.value=""; }
+});
+document.addEventListener("keydown", ev=>{ if(ev.key==="Escape" && $("#layer").innerHTML) $("#layer").innerHTML=""; if(ev.key==="Enter" && ev.target.id==="byl-new"){ ev.preventDefault(); document.querySelector('[data-act="byladd"]')?.click(); } });
+
+async function deleteVisit(id){
+  try{
+    const ims=imagesOf(id);
+    await Promise.all([
+      ...S.contacts.filter(c=>c.visitId===id).map(c=>S.db.collection("contacts").doc(c.id).delete()),
+      ...S.products.filter(p=>p.visitId===id).map(p=>S.db.collection("products").doc(p.id).delete()),
+      ...ims.map(im=>S.db.collection("images").doc(im.id).delete()),
+    ]);
+    for(const im of ims){ try{ await S.assets?.delete(im.assetId); }catch{} }
+    await S.db.collection("visits").doc(id).delete();
+    toast("Visit deleted"); go("visits");
+  }catch{ toast("Could not delete this visit"); }
+}
+
+render();
+boot();
+</script>
