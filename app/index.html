@@ -328,7 +328,7 @@ function tabBar(){
   const t=(id,label)=>`<button class="tab" data-act="go" data-to="${id}" ${S.view===id||(id==="suppliers"&&S.view==="supplier")||(id==="visits"&&S.view==="visit")?'aria-current="page"':""}>${ICON[id]}${label}</button>`;
   return `<nav class="tabs" aria-label="Sections"><div class="tabs-in">${t("visits","Visits")}${t("suppliers","Suppliers")}<button class="fab" data-act="new">${ICON.plus}New visit</button>${t("products","Products")}${t("export","Export")}</div></nav>`;
 }
-function statusPill(s){ const m={capturing:["draft","Draft"],analysing:["analysing","Analysing"],review:["review","To review"],confirmed:["confirmed","Confirmed"]}[s]||["draft",s||"Draft"]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
+function statusPill(s){ const m={capturing:["draft","Draft · analyse"],analysing:["analysing","Analysing"],review:["review","To review"],confirmed:["confirmed","Confirmed"]}[s]||["draft",s||"Draft"]; return `<span class="pill ${m[0]}">${m[1]}</span>`; }
 function srcChip(src,path){ const s=SRC[src]?src:"inference"; return path ? `<button type="button" class="src" data-s="${s}" data-act="src" data-path="${path}" title="${esc(SRC[s].label)}. Tap to change">${SRC[s].short}</button>` : `<span class="src" data-s="${s}" title="${esc(SRC[s].label)}">${SRC[s].short}</span>`; }
 function imagesOf(visitId){ return S.images.filter(i=>i.visitId===visitId).sort((a,b)=>(a.takenAt||a.createdAt||"").localeCompare(b.takenAt||b.createdAt||"")||(a.seq||0)-(b.seq||0)); }
 function readOnlyNotice(){ return (S.canWrite===false || !S.assets) ? `<div class="notice">You can browse, but capturing visits needs <b>Editor</b> access. Ask the app owner to share it with you as an Editor.</div>` : ""; }
@@ -383,7 +383,7 @@ function viewCapture(){
     </div>
     <div class="field"><label for="c-notes">Quick note <span class="muted">(optional, saved as a buyer note)</span></label>
       <textarea id="c-notes" data-cap="notes" rows="2" placeholder="e.g. Good quality bamboo range, said FOB Xiamen, 2 weeks for samples">${esc(c.notes)}</textarea></div>
-    ${S.sample?"":`<div class="notice">AI analysis is not available in this view. You can still save photos and type the details yourself.</div>`}
+    ${S.imgLimits?"":noAiNotice()}
   </main>`;
 }
 function renderShots(){
@@ -393,6 +393,10 @@ function renderShots(){
     : `<div class="empty-state" style="padding:18px"><p>No photos yet. Start with the business card.</p></div>`;
   renderCaptureBar();
 }
+function noAiNotice(){
+  return `<div class="notice"><b>Photo analysis isn't available in this view.</b> The Claude phone app can't send photos to the AI yet. Your photos are still saved. Either:
+    <ul style="margin:6px 0 0;padding-left:18px"><li>open this app in your browser (claude.ai in Safari or Chrome, or on a laptop), open the visit and tap <b>Analyse</b>, or</li><li>tap <b>Type it myself</b> to fill in the details now.</li></ul></div>`;
+}
 function renderCaptureBar(){
   if(!S.cap) return;
   const n=S.cap.shots.length; const max=S.imgLimits?.maxCount;
@@ -400,7 +404,7 @@ function renderCaptureBar(){
   $("#bar").innerHTML=`<div class="actbar"><div class="actbar-in">
     <button class="btn ghost small" data-act="manual" ${n?"":"disabled"}>Type it myself</button>
     <span class="hint">${hint}</span>
-    <button class="btn primary" data-act="analyse" ${n&&S.sample?"":"disabled"}>${ICON.spark}Analyse</button></div></div>`;
+    ${S.sample&&S.imgLimits?`<button class="btn primary" data-act="analyse" ${n?"":"disabled"}>${ICON.spark}Analyse</button>`:`<button class="btn primary" data-act="later" ${n?"":"disabled"}>Save for later</button>`}</div></div>`;
 }
 async function ensureVisitDoc(){
   const c=S.cap; if(c.created) return; if(c.createP) return c.createP;
@@ -532,8 +536,9 @@ async function analyse(){
       rate_limited:"Claude usage limit reached for now. Type the details yourself or try again in a few minutes.",
       invalid_json:"The AI answer could not be read. Tap Analyse to try again.", refused:"The AI declined these photos. Type the details yourself.",
       image_rejected:"One of the photos could not be read. Remove it and try again.", no_images:"Photos are still loading. Try again in a moment.",
-      images_unavailable:"This view cannot send photos to Claude. Type the details yourself."}[e?.code] || "Analysis failed. Tap Analyse to try again, or type the details yourself.";
+      images_unavailable:"This view can't send photos to the AI. Photos are saved. Analyse later from a browser, or type the details yourself."}[e?.code] || "Analysis failed. Tap Analyse to try again, or type the details yourself.";
     try{ if(S.cap?.created) await S.cap.ref.update({status:"capturing"}); }catch{}
+    if(e?.code==="images_unavailable"||e?.code==="not_granted"||e?.code==="sampling_disabled"){ S.imgLimits=null; if(S.view==="capture"){ $("#app").innerHTML=viewCapture(); renderShots(); } }
     toast(msg,5000);
   }
 }
@@ -796,6 +801,7 @@ document.addEventListener("click", async ev=>{
   else if(a==="rmshot") removeShot(el.dataset.k);
   else if(a==="analyse") analyse();
   else if(a==="manual") manualReview();
+  else if(a==="later"){ (async()=>{ try{ await ensureVisitDoc(); }catch{} go("visits"); toast("Saved as a draft. Open it in a browser to analyse"); })(); }
   else if(a==="stopai") analyseCtl?.abort();
   else if(a==="vfilter"){ S.visitFilter=el.dataset.f; render(); }
   else if(a==="pfilter"){ S.pstatus=el.dataset.f; render(); }
